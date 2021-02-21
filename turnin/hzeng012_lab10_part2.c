@@ -135,10 +135,10 @@ int lockSMTick(int state) {
         default: state = lock_start; break;
     }
     switch (state) {
-        case lock_start: PORTB = 7; break;
+        case lock_start: PORTB = 0; break;
         case lock_state1: break;
         case lock_state2: break;
-        case lock_state3: PORTB = 9; break;
+        case lock_state3: break;
         case lock_state4: break;
         case lock_state5: break;
         case lock_unlock: PORTB = 1; break;

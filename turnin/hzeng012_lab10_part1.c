@@ -22,7 +22,6 @@
 unsigned char led0_output = 0x00;
 unsigned char led1_output = 0x00;
 unsigned char pause = 0;
-unsigned char button = 0x00;
 //-------End Shared Variables--------------------
 
 enum pauseButtonSM_States { pauseButton_wait, pauseButton_press, pauseButton_release };
@@ -97,51 +96,44 @@ int displaySMTick(int state) {
 enum keypad_States { keypad_press };
 
 int keypadSMTick(int state) {
+    unsigned char button = GetKeypadKey();
+    PORTB = if(button != '\0') PORTB & 0x01;
     switch (state) {
         case keypad_press: state = keypad_press; break;
         default: state = keypad_press; break;
     }
     switch (state) {
         case keypad_press:
-            button = GetKeypadKey();
+            if(button == '\0') {
+                PORTB = 0x1F;
+            } else if(button == '1') {
+                PORTB = 0x01;
+            } else if(button == '2') {
+                PORTB = 0x02;
+            } else if(button == '3') {
+                PORTB = 0x03;
+            } else if(button == '4') {
+                PORTB = 0x04;
+            } else if(button == '5') {
+                PORTB = 0x05;
+            } else if(button == '6') {
+                PORTB = 0x06;
+            } else if(button == '7') {
+                PORTB = 0x07;
+            } else if(button == '8') {
+                PORTB = 0x08;
+            } else if(button == '9') {
+                PORTB = 0x09;
+            } else if(button == '#') {
+                PORTB = 0x0F;
+            } else if(button == '*') {
+                PORTB = 0x0E;
+            }
         break;
         default:
-            button = 0x1B;
+            PORTB = 0x1B;
             state = keypad_press;
         break;
-    }
-    return state;
-}
-
-
-enum lock_States { lock_start, lock_state1, lock_state2, lock_state3, lock_state4, lock_state5, lock_unlock };
-
-int lockSMTick(int state) {
-    unsigned char lock = (PINB) & 0x80;
-    switch (state) {
-        case lock_start: if(button == '#') state = lock_state1;
-                          if(lock) state = lock_start; break;
-        case lock_state1: if(button == '1') state = lock_state2;
-                          if(lock) state = lock_start; break;
-        case lock_state2: if(button == '2') state = lock_state3;
-                          if(lock) state = lock_start; break;
-        case lock_state3: if(button == '3') state = lock_state4;
-                          if(lock) state = lock_start; break;
-        case lock_state4: if(button == '4') state = lock_state5;
-                          if(lock) state = lock_start; break;
-        case lock_state5: if(button == '5') state = lock_unlock;
-                          if(lock) state = lock_start; break;
-        case lock_unlock: if(lock) state = lock_start; break;
-        default: state = lock_start; break;
-    }
-    switch (state) {
-        case lock_start: PORTB = 7; break;
-        case lock_state1: break;
-        case lock_state2: break;
-        case lock_state3: PORTB = 9; break;
-        case lock_state4: break;
-        case lock_state5: break;
-        case lock_unlock: PORTB = 1; break;
     }
     return state;
 }
@@ -151,8 +143,8 @@ int main(void) {
     DDRA = 0x00; PORTA = 0xFF;
     DDRB = 0xFF; PORTB = 0x00;
     /* Insert your solution below */
-    static task task1, task2, task3, task4, task5, task6;
-    task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6 };
+    static task task1, task2, task3, task4, task5;
+    task *tasks[] = { &task1, &task2, &task3, &task4, &task5 };
     const unsigned short numTasks = sizeof(tasks)/sizeof(*tasks);
     const char start = -1;
     // pause button
@@ -180,23 +172,18 @@ int main(void) {
     task5.period = 50;
     task5.elapsedTime = task5.period;
     task5.TickFct = &keypadSMTick;
-    // lock
-    task6.state = start;
-    task6.period = 50;
-    task6.elapsedTime = task6.period;
-    task6.TickFct = &lockSMTick;
 
     unsigned short i;
 
     unsigned long GCD = tasks[0]->period;
-    for(i = 4; i < numTasks; i++) {
+    for(i = 1; i < numTasks; i++) {
         GCD = findGCD(GCD, tasks[i]->period);
     }
 
     TimerSet(GCD);
     TimerOn();
     while (1) {
-        for(i = 4; i < numTasks; i++) {
+        for(i = 0; i < numTasks; i++) {
             if(tasks[i]->elapsedTime == tasks[i]->period) {
                 tasks[i]->state = tasks[i]->TickFct(tasks[i]->state);
                 tasks[i]->elapsedTime = 0;
