@@ -1,13 +1,13 @@
  /* Author: Hulbert Zeng
  * Partner(s) Name (if applicable):  
  * Lab Section: 021
- * Assignment: Lab #10  Exercise #1
+ * Assignment: Lab #10  Exercise #3
  * Exercise Description: [optional - include for your own benefit]
  *
  * I acknowledge all content contained herein, excluding template or example
  * code, is my own original work.
  *
- *  Demo Link: No video demo needed
+ *  Demo Link: https://www.youtube.com/watch?v=9_OG4x7oqc0&feature=youtu.be
  */ 
 #include <avr/io.h>
 #ifdef _SIMULATE_
@@ -17,6 +17,13 @@
 #include "keypad.h"
 #include "scheduler.h"
 #include "timer.h"
+
+//-------Shared Variables------------------------
+unsigned char led0_output = 0x00;
+unsigned char led1_output = 0x00;
+unsigned char pause = 0;
+unsigned char button = 0x00;
+//-------End Shared Variables--------------------
 
 void set_PWM(double frequency) {
     static double current_frequency;
@@ -43,13 +50,6 @@ void PWM_off() {
     TCCR3A = 0x00;
     TCCR3B = 0x00;
 }
-
-//-------Shared Variables------------------------
-unsigned char led0_output = 0x00;
-unsigned char led1_output = 0x00;
-unsigned char pause = 0;
-unsigned char button = 0x00;
-//-------End Shared Variables--------------------
 
 enum pauseButtonSM_States { pauseButton_wait, pauseButton_press, pauseButton_release };
 
@@ -143,7 +143,7 @@ int keypadSMTick(int state) {
 enum lock_States { lock_start, lock_state1, lock_state2, lock_state3, lock_state4, lock_state5, lock_unlock };
 
 int lockSMTick(int state) {
-    unsigned char lock = (PINB) & 0x80;
+    unsigned char lock = (~PINB) & 0x80;
     switch (state) {
         case lock_start: if(button == '#') state = lock_state1;
                           if(lock) state = lock_start; break;
@@ -173,37 +173,44 @@ int lockSMTick(int state) {
 }
 
 
-enum doorbell_States { doorbell_off, doorbell_buffer, doorbell_melody, };
-// unshared variables
-double melody[15] = { /* melody notes */ };
-unsigned char i = 0;
+enum doorbell_States { doorbell_wait, doorbell_melody, doorbell_buffer };
+double melody[16] = {261.63, 392.00, 349.23, 329.63, 293.66, 523.25, 392.00, 349.23, 329.63, 293.66, 523.25, 392.00, 349.23, 329.63, 349.23, 293.66 };
+unsigned char melody_index = 0;
 
 int doorbellSMTick(int state) {
-    unsigned char on = (~PINA) & 0x80;
+    unsigned char doorbell = (~PINA) & 0x80;
     switch(state) {
-        case doorbell_off: if(on) { state = doorbell_melody; } break;
+        case doorbell_wait:
+            if(doorbell) { state = doorbell_melody; }
+            else { state = doorbell_wait; }
+            break;
         case doorbell_melody:
-            if(i < 15) {
+            if(melody_index < 16) {
                 PWM_on();
-                set_PWM(melody[i]);
-                ++i;
+                set_PWM(melody[melody_index]);
+                ++melody_index;
             } else {
-                i = 0;
+                melody_index = 0;
                 PWM_off();
                 state = doorbell_buffer;
             }
             break;
-        case doorbell_buffer: if(!on) { state = doorbell_off; } break;
-        default: state = doorbell_off; break;
+        case doorbell_buffer:
+            if(!doorbell) { state = doorbell_wait; }
+            else { state = doorbell_buffer; }
+            break;
+        default:
+            state = doorbell_wait;
+            break;
     }
-
     return state;
 }
 
 int main(void) {
     /* Insert DDR and PORT initializations */
+    DDRC = 0xF0; PORTC = 0x0F;
+    DDRB = 0x7F; PORTB = 0x10;
     DDRA = 0x00; PORTA = 0xFF;
-    DDRB = 0xFF; PORTB = 0x00;
     /* Insert your solution below */
     static task task1, task2, task3, task4, task5, task6, task7;
     task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6, &task7 };

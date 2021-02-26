@@ -1,13 +1,13 @@
  /* Author: Hulbert Zeng
  * Partner(s) Name (if applicable):  
  * Lab Section: 021
- * Assignment: Lab #10  Exercise #1
+ * Assignment: Lab #10  Exercise #2
  * Exercise Description: [optional - include for your own benefit]
  *
  * I acknowledge all content contained herein, excluding template or example
  * code, is my own original work.
  *
- *  Demo Link: No video demo needed
+ *  Demo Link: https://youtu.be/G_btRCNhOBA
  */ 
 #include <avr/io.h>
 #ifdef _SIMULATE_
@@ -117,7 +117,7 @@ int keypadSMTick(int state) {
 enum lock_States { lock_start, lock_state1, lock_state2, lock_state3, lock_state4, lock_state5, lock_unlock };
 
 int lockSMTick(int state) {
-    unsigned char lock = (PINB) & 0x80;
+    unsigned char lock = (~PINB) & 0x80;
     switch (state) {
         case lock_start: if(button == '#') state = lock_state1;
                           if(lock) state = lock_start; break;
@@ -148,8 +148,8 @@ int lockSMTick(int state) {
 
 int main(void) {
     /* Insert DDR and PORT initializations */
-    DDRA = 0x00; PORTA = 0xFF;
-    DDRB = 0xFF; PORTB = 0x00;
+    DDRC = 0xF0; PORTC = 0x0F;
+    DDRB = 0x7F; PORTB = 0x10;
     /* Insert your solution below */
     static task task1, task2, task3, task4, task5, task6;
     task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6 };

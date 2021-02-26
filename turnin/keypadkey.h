@@ -15,8 +15,8 @@
 //Px2 3	| 7 | 8 | 9 | C
 //Px3 4	| * | 0 | # | D
 
-#ifndef KEYPAD_H
-#define KEYPAD_H
+#ifndef KEYPADKEY_H
+#define KEYPADKEY_H
 
 #include <avr/io.h>
 #include <bit.h>
@@ -37,7 +37,7 @@
 //Functionality - Gets input from a keypad via time-multiplexing
 //Parameter: None
 //Returns: A keypad button press else '\0'
-unsigned char GetKeypad() {
+unsigned char Key() {
 
 	// Check keys in col 1
 	KEYPADPORT = SetBit(0xFF,COL1,0); // Set Px4 to 0; others 1
@@ -45,7 +45,6 @@ unsigned char GetKeypad() {
 	if ( GetBit(~KEYPADPIN,ROW1) ) { return '1'; }
 	if ( GetBit(~KEYPADPIN,ROW2) ) { return '4'; }
 	if ( GetBit(~KEYPADPIN,ROW3) ) { return '7'; }
-	if ( GetBit(~KEYPADPIN,ROW4) ) { return '*'; }
 
 	// Check keys in col 2
 	KEYPADPORT = SetBit(0xFF,COL2,0); // Set Px5 to 0; others 1
@@ -74,4 +73,4 @@ unsigned char GetKeypad() {
 	return '\0';
 }
 
-#endif //KEYPAD_H
+#endif //KEYPADKEY_H

@@ -97,7 +97,7 @@ enum keypad_States { keypad_press };
 
 int keypadSMTick(int state) {
     unsigned char button = GetKeypadKey();
-    PORTB = if(button != '\0') PORTB & 0x01;
+    if(button != '\0') PORTB = PORTB & 0x01;
     switch (state) {
         case keypad_press: state = keypad_press; break;
         default: state = keypad_press; break;
@@ -140,8 +140,8 @@ int keypadSMTick(int state) {
 
 int main(void) {
     /* Insert DDR and PORT initializations */
-    DDRA = 0x00; PORTA = 0xFF;
-    DDRB = 0xFF; PORTB = 0x00;
+    DDRC = 0xF0; PORTC = 0x0F;
+    DDRB = 0x7F; PORTB = 0x10;
     /* Insert your solution below */
     static task task1, task2, task3, task4, task5;
     task *tasks[] = { &task1, &task2, &task3, &task4, &task5 };

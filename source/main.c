@@ -1,13 +1,13 @@
  /* Author: Hulbert Zeng
  * Partner(s) Name (if applicable):  
  * Lab Section: 021
- * Assignment: Lab #10  Exercise #1
+ * Assignment: Lab #10  Exercise #4
  * Exercise Description: [optional - include for your own benefit]
  *
  * I acknowledge all content contained herein, excluding template or example
  * code, is my own original work.
  *
- *  Demo Link: No video demo needed
+ *  Demo Link: 
  */ 
 #include <avr/io.h>
 #ifdef _SIMULATE_
@@ -15,6 +15,7 @@
 #endif
 
 #include "keypad.h"
+#include "keypadkey.h"
 #include "scheduler.h"
 #include "timer.h"
 
@@ -23,7 +24,34 @@ unsigned char led0_output = 0x00;
 unsigned char led1_output = 0x00;
 unsigned char pause = 0;
 unsigned char button = 0x00;
+unsigned char password[6] = { '#', '1', '2', '3', '4', '5' };
 //-------End Shared Variables--------------------
+
+void set_PWM(double frequency) {
+    static double current_frequency;
+    if(frequency != current_frequency) {
+        if(!frequency) { TCCR3B &= 0x08; }
+        else {TCCR3B |= 0x03; }
+
+        if(frequency < 0.954) { OCR3A = 0xFFFF; }
+        else if(frequency > 31250) { OCR3A = 0x0000; }
+        else { OCR3A = (short)(8000000/ (128*frequency)) -1; }
+
+        TCNT3 = 0;
+        current_frequency = frequency;
+    }
+}
+
+void PWM_on() {
+    TCCR3A = (1<< COM3A0);
+    TCCR3B = (1<< WGM32) | (1<<CS31) | (1<<CS30);
+    set_PWM(0);
+}
+
+void PWM_off() {
+    TCCR3A = 0x00;
+    TCCR3B = 0x00;
+}
 
 enum pauseButtonSM_States { pauseButton_wait, pauseButton_press, pauseButton_release };
 
@@ -103,7 +131,7 @@ int keypadSMTick(int state) {
     }
     switch (state) {
         case keypad_press:
-            button = GetKeypadKey();
+            button = GetKeypad();
         break;
         default:
             button = 0x1B;
@@ -117,28 +145,28 @@ int keypadSMTick(int state) {
 enum lock_States { lock_start, lock_state1, lock_state2, lock_state3, lock_state4, lock_state5, lock_unlock };
 
 int lockSMTick(int state) {
-    unsigned char lock = (PINB) & 0x80;
+    unsigned char lock = (~PINB) & 0x80;
     switch (state) {
-        case lock_start: if(button == '#') state = lock_state1;
+        case lock_start: if(button == password[0]) state = lock_state1;
                           if(lock) state = lock_start; break;
-        case lock_state1: if(button == '1') state = lock_state2;
+        case lock_state1: if(button == password[1]) state = lock_state2;
                           if(lock) state = lock_start; break;
-        case lock_state2: if(button == '2') state = lock_state3;
+        case lock_state2: if(button == password[2]) state = lock_state3;
                           if(lock) state = lock_start; break;
-        case lock_state3: if(button == '3') state = lock_state4;
+        case lock_state3: if(button == password[3]) state = lock_state4;
                           if(lock) state = lock_start; break;
-        case lock_state4: if(button == '4') state = lock_state5;
+        case lock_state4: if(button == password[4]) state = lock_state5;
                           if(lock) state = lock_start; break;
-        case lock_state5: if(button == '5') state = lock_unlock;
+        case lock_state5: if(button == password[5]) state = lock_unlock;
                           if(lock) state = lock_start; break;
         case lock_unlock: if(lock) state = lock_start; break;
         default: state = lock_start; break;
     }
     switch (state) {
-        case lock_start: PORTB = 7; break;
+        case lock_start: PORTB = 0; break;
         case lock_state1: break;
         case lock_state2: break;
-        case lock_state3: PORTB = 9; break;
+        case lock_state3: break;
         case lock_state4: break;
         case lock_state5: break;
         case lock_unlock: PORTB = 1; break;
@@ -146,13 +174,110 @@ int lockSMTick(int state) {
     return state;
 }
 
+
+enum doorbell_States { doorbell_wait, doorbell_melody, doorbell_buffer };
+double melody[16] = {261.63, 392.00, 349.23, 329.63, 293.66, 523.25, 392.00, 349.23, 329.63, 293.66, 523.25, 392.00, 349.23, 329.63, 349.23, 293.66 };
+unsigned char melody_index = 0;
+
+int doorbellSMTick(int state) {
+    unsigned char doorbell = (~PINA) & 0x80;
+    switch(state) {
+        case doorbell_wait:
+            if(doorbell) { state = doorbell_melody; }
+            else { state = doorbell_wait; }
+            break;
+        case doorbell_melody:
+            if(melody_index < 16) {
+                PWM_on();
+                set_PWM(melody[melody_index]);
+                ++melody_index;
+            } else {
+                melody_index = 0;
+                PWM_off();
+                state = doorbell_buffer;
+            }
+            break;
+        case doorbell_buffer:
+            if(!doorbell) { state = doorbell_wait; }
+            else { state = doorbell_buffer; }
+            break;
+        default:
+            state = doorbell_wait;
+            break;
+    }
+    return state;
+}
+
+
+enum change_States { change_wait, change_input, change_buffer } ;
+unsigned char newpass[6] =  {'#', ' ', ' ', ' ', ' ', ' ' };
+unsigned char i = 1;
+unsigned char time = 0;
+
+int changepasswordSMTick(int state) {
+    unsigned char input = Key();
+    unsigned char asterick = GetKeypad();
+    unsigned char lock = (~PINB) & 0x80;
+
+    switch(state) {
+        case change_wait: 
+            if(input == '\0') { state = change_wait; }
+            else { state = change_input; } break;
+        case change_input:
+            if(lock && asterick == '*') {
+                if(i < 6) {
+                    if(input != '\0') {
+                        newpass[i] = input;
+                        ++i;
+                    }
+                }
+                state = change_input;
+            } else {
+                i = 1;
+                if(newpass[5] == ' ') {
+                    newpass[1] = ' ';
+                    newpass[2] = ' ';
+                    newpass[3] = ' ';
+                    newpass[4] = ' ';
+                    state = change_wait;
+                } else {
+                    state = change_buffer;
+                }
+            }
+            break;
+        case change_buffer:
+            if(time < 10) { 
+                state = change_buffer; 
+                ++time;
+            } else { 
+                time = 0;
+                password[1] = newpass[1];
+                password[2] = newpass[2];
+                password[3] = newpass[3];
+                password[4] = newpass[4];
+                password[5] = newpass[5];
+                newpass[1] = ' ';
+                newpass[2] = ' ';
+                newpass[3] = ' ';
+                newpass[4] = ' ';
+                newpass[5] = ' ';
+                state = change_wait; 
+            } 
+            break;
+        default: state = change_wait; break;
+    }
+
+    return state;
+}
+
 int main(void) {
     /* Insert DDR and PORT initializations */
+    DDRC = 0xF0; PORTC = 0x0F;
+    DDRB = 0x7F; PORTB = 0x10;
     DDRA = 0x00; PORTA = 0xFF;
-    DDRB = 0xFF; PORTB = 0x00;
     /* Insert your solution below */
-    static task task1, task2, task3, task4, task5, task6;
-    task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6 };
+    static task task1, task2, task3, task4, task5, task6, task7, task8;
+    task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6, &task7, &task8 };
     const unsigned short numTasks = sizeof(tasks)/sizeof(*tasks);
     const char start = -1;
     // pause button
@@ -185,6 +310,16 @@ int main(void) {
     task6.period = 50;
     task6.elapsedTime = task6.period;
     task6.TickFct = &lockSMTick;
+    // doorbell
+    task7.state = start;
+    task7.period = 200;
+    task7.elapsedTime = task7.period;
+    task7.TickFct = &doorbellSMTick;
+    // change password
+    task8.state = start;
+    task8.period = 200;
+    task8.elapsedTime = task8.period;
+    task8.TickFct = &changepasswordSMTick;
 
     unsigned short i;
 
